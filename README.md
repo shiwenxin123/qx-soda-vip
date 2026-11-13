@@ -35,10 +35,10 @@ QX → 重写规则 → `+`：
 
 ```
 # jsDelivr（推荐）
-https://cdn.jsdelivr.net/gh/<USER>/<REPO>@main/soda_vip_unlock.js
+https://cdn.jsdelivr.net/gh/shiwenxin123/qx-soda-vip@main/soda_vip_unlock.js
 
-# GitHub raw
-https://raw.githubusercontent.com/<USER>/<REPO>/main/soda_vip_unlock.js
+# GitHub raw（国内常被墙，备用）
+https://raw.githubusercontent.com/shiwenxin123/qx-soda-vip/main/soda_vip_unlock.js
 ```
 
 改了脚本想让 QX 重新拉取：把规则删掉重加一次，或 QX 里清一次脚本缓存。
