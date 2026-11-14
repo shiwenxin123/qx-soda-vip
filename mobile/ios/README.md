@@ -201,3 +201,63 @@ iOS 不越狱 **没有**通用绕过手段（QX/Surge/Loon 都只能做 MITM，�
 
 > 换句话说：iOS 这条路能不能通，**在做任何脚本之前**用 `JS` 计数就能判断。
 > `JS=0` 就没必要继续调脚本了。
+
+---
+
+## ★ 更正：真正的流量不在 qishui.com
+
+2026-11-14 23:59 的网络活动截图推翻了我之前的判断。汽水实际跑的是**字节的共享域名**：
+
+| 域名 | 用途 | 证据 |
+|---|---|---|
+| `ads5-normal-gl2.zijieapi.com` | **广告 API** | 9KB↓ / 5KB↑，有完整往返 |
+| `lf-reward-video.bytedcdn.com` | **激励视频素材** | 7KB↓ / 1KB↑ |
+| `v11-luna.douyinvod.com` | 音视频 CDN | **1MB↓** ← 正在放歌 |
+| `lf-res-3.douyinstatic.com` | 静态资源（封面/图标） | 46KB↓ |
+| `app-alpha.bytedance.net` | 字节配置下发 | 0B（走别的通道） |
+| `log5-lf.qishui.com` | 只是日志上报 | 之前那一堆 |
+
+**所以之前把 qishui.com 加进 MITM 是在解错的东西**：那批 `log*-lf.qishui.com`
+是日志通道，本来就没什么可改的；真正的广告和业务都在 `zijieapi` / `bytedance` 系域名上。
+
+## 去广告：不需要 MITM（推荐先做这个）
+
+`qx-soda-ads.conf` 用 `[filter_local]` + `HOST-SUFFIX → REJECT` 在**连接层**拒绝广告域名。
+不碰 TLS、不用证书、不会被 pinning 挡，也不会把 App 搞成「网络出错」。
+
+```
+[filter_local]
+HOST-SUFFIX, ads5-normal-gl2.zijieapi.com, REJECT
+HOST-SUFFIX, lf-reward-video.bytedcdn.com, REJECT
+HOST-SUFFIX, pglstatp.com, REJECT
+HOST-SUFFIX, pangolin-sdk-toutiao.com, REJECT
+```
+
+**千万别拒**这三个（拒了就不是没广告，是没声音/没界面）：
+- `v11-luna.douyinvod.com` — 音视频 CDN
+- `lf-res-3.douyinstatic.com` — 静态资源
+- `app-alpha.bytedance.net` — 配置下发
+
+### 「每天自动看广告换时长」怎么落地
+
+激励流程拆开是三段：**拉广告配置 → 播 bytedcdn 上的视频 → 回调发奖励**。
+
+拒掉 `lf-reward-video.bytedcdn.com` 后，第二段拿不到素材。这时有两种结果：
+
+- 广告 SDK 判失败 → 直接跳过，**免费获得跳过**（多数版本是这样，等于白嫖）
+- 广告 SDK 仍然回调"完成" → 连奖励也一起拿到（部分实现有这毛病）
+
+先只加这一条试一次，看广告是"跳过"还是"卡住"。卡住的话再退回只拒 `ads5-normal-gl2`。
+
+## MITM 到底能不能用：分阶段测
+
+`qx-soda-mitm-staged-test.conf` 给了三步法，核心是**一次只加一个域名**：
+
+1. 只解密 `ads5-normal-gl2.zijieapi.com`（广告域名，坏了也不影响听歌）
+2. 看 QX 顶部 **JS 计数是否 +1**
+   - `+1` → 能解密，继续
+   - 仍是 `0`、连接 `0B/0B` → **pinning**，iOS 不越狱到此为止
+3. 逐个加业务域名，每次只加一个并试播
+
+> 我上次的错：一次加了 6 个 qishui 域名，App 全挂还分不清是谁的问题。
+> 而且加错了对象 —— 那些是日志域名。

@@ -20,7 +20,8 @@ const KEY = 'soda_ad_probe';
 const MAX = 20;
 
 // 只记录"可能跟广告/奖励有关"的请求，避免噪音把存储刷满
-const HINT = /(media_ads|media_ad|ad_config|ad_configs|\bad\b|\bad_|_ad\b|ads|advert|advertise|reward|incentive|incent|ecpm|csj|pangolin|pangle|toutiao|union|激励|广告)/i;
+// 实测：广告走 ads5-normal-gl2.zijieapi.com、素材走 lf-reward-video.bytedcdn.com
+const HINT = /(media_ads|media_ad|ad_config|ad_configs|\bad\b|\bad_|_ad\b|ads|advert|advertise|reward|incentive|incent|ecpm|csj|pangolin|pangle|toutiao|union|激励|广告|zijieapi|bytedcdn)/i;
 
 function readStore() {
   try {
