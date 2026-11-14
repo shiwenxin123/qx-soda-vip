@@ -143,4 +143,7 @@ try {
   out = body;
 }
 
-$done({ body: out });
+// 强制 UTF-8：QX 在 zh-CN 环境下可能按 GBK 编码返回体，导致中文歌名乱码
+const outHeaders = Object.assign({}, ($response && $response.headers) || {});
+outHeaders['Content-Type'] = 'application/json; charset=utf-8';
+$done({ body: out, headers: outHeaders });

@@ -16,15 +16,18 @@ let out = body;
 try {
   const j = JSON.parse(body);
   // 往返回的 JSON 里塞一个显眼字段
-  j.MITM_SELFTEST = '✅ MITM 与重写都已生效';
+  j.MITM_SELFTEST = 'MITM_AND_REWRITE_BOTH_WORK';
   j.MITM_TIME = new Date().toISOString();
   out = JSON.stringify(j, null, 2);
 } catch (e) {
   // 不是 JSON 就纯文本标记
-  out = '✅ MITM OK — ' + body;
+  out = 'MITM_OK\n' + body;
 }
 
-$notify('✅ MITM 自检', '重写已生效', url.slice(0, 50));
+$notify('MITM self-test', 'rewrite works', url.slice(0, 50));
 console.log('[selftest] rewrote: ' + url);
 
-$done({ body: out });
+// 强制 UTF-8，否则 QX 可能按系统 locale 编码导致中文乱码
+const h = Object.assign({}, ($response && $response.headers) || {});
+h['Content-Type'] = 'application/json; charset=utf-8';
+$done({ body: out, headers: h });
