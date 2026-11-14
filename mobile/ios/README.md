@@ -79,3 +79,83 @@ python3 mobile/tools/mp4_duration.py ./soda_cache/
 - 时长 30s / 60s → 服务端只给了试听
 
 不越狱就没有文件系统访问，只能在 App 里看播放条总时长。
+
+---
+
+## 附：实测主机名（重要，决定规则生不生效）
+
+iPhone 上 QX「DNS 缓存」页看到的汽水真实接口主机是**两级子域 + `-lf` 后缀**：
+
+```
+api3-lf.qishui.com     api5-lf.qishui.com
+conf3-lf.qishui.com    conf5-lf.qishui.com
+log3-lf.qishui.com     log5-lf.qishui.com
+```
+
+QX 的 `[mitm] hostname` 里只写 `*.qishui.com` **不保证跨两层匹配**。
+匹配不上 → 只看到 CONNECT、拿不到明文 → 规则等于没加，表现就是
+「加了重写但还是弹会员 / 还是有广告」。
+
+所以 `qx-soda-ios.conf` v2 里是显式列出来的：
+
+```
+hostname = qishui.com, *.qishui.com, *-lf.qishui.com,
+           api.qishui.com, api3-lf.qishui.com, api5-lf.qishui.com,
+           conf3-lf.qishui.com, conf5-lf.qishui.com,
+           log3-lf.qishui.com, log5-lf.qishui.com,
+           aweme.snssdk.com, lf-*.douyin.com, *.douyin.com,
+           *.pglstatp.com, *.pangolin-sdk-toutiao.com
+```
+
+改完记得：QX 首页关掉再开一次（或设置里「重新载入配置」），MITM 才会重新读 hostname。
+
+## 附：广告怎么去
+
+汽水广告位大体三块：
+
+| 来源 | 特征 | 处理 |
+|---|---|---|
+| 自有广告位 | `*/luna/media_ads` | `url reject-dict`（返回空 JSON，SDK 不会疯狂重试） |
+| 激励视频/任务 | URL 含 `reward` / `incentive` / `ad_complete` | 先 probe 抓，再决定 reject 还是重放 |
+| 抖音广告联盟 | `pglstatp` / `pangolin-sdk-toutiao` / `adsdk` | `url reject` |
+
+`qx-soda-ios.conf` 里已经带了前两块 + 联盟域的 reject。
+
+> 注意：如果 VIP 改写真的生效（`is_ad_free` 被置真），很多广告位会自己消失。
+> **还有广告 = 改写没生效**，先按上面查 hostname，别急着堆广告规则。
+
+## 附：「每天自动看广告」怎么做
+
+两种思路，成本和成功率差很多：
+
+### 甲：让广告瞬间播完（推荐先试）
+
+改写广告配置里的时长字段，1 秒播完即算完成：
+
+```
+[rewrite_local]
+^https?://[^/]*qishui\.com/luna/(media_ads|ad_config) url script-response-body https://cdn.jsdelivr.net/gh/shiwenxin123/qx-soda-vip@main/mobile/ios/qx_soda_ad_auto.js
+```
+
+`qx_soda_ad_auto.js` 会把 `duration / ad_duration / skip_time` 之类字段压到 1 或 0。
+成功率取决于服务端有没有二次校验「观看时长」；有校验的话会判失败。
+
+### 乙：重放奖励回调（有效但容易被风控）
+
+1. 先挂探针，把真实接口抓出来：
+
+```
+[rewrite_local]
+^https?://[^/]*qishui\.com/ url script-request-header https://cdn.jsdelivr.net/gh/shiwenxin123/qx-soda-vip@main/mobile/ios/qx_soda_ad_probe.js
+```
+
+2. 看一轮广告，QX 会推送命中的 URL，同时存到本地键 `soda_ad_probe`
+3. 把抓到的那个 POST 填进 `qx_soda_ad_auto.js` 的 `replayReward()`，按需重放
+
+> 同一个 `request_id` / `ad_id` 复用会被服务端拒，需要每次重新拉一次广告配置拿新 id。
+> 这条路线本质上是在伪造观看记录，账号侧有被标记的风险，自己权衡。
+
+### 丙：不折腾广告
+
+如果 VIP 改写生效了，广告位通常直接没了，不需要「看广告换时长」。
+先把 `hostname` 改对、确认 `api5-lf` 的响应能被改写，再回来看这条。
