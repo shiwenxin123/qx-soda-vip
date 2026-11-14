@@ -159,3 +159,45 @@ hostname = qishui.com, *.qishui.com, *-lf.qishui.com,
 
 如果 VIP 改写生效了，广告位通常直接没了，不需要「看广告换时长」。
 先把 `hostname` 改对、确认 `api5-lf` 的响应能被改写，再回来看这条。
+
+---
+
+## 故障排查：加了规则后「网络出错，请检查网络」
+
+**先看两个数字**（QX 网络活动页顶部）：
+
+| 现象 | 含义 | 处理 |
+|---|---|---|
+| 大量 `qishui` 连接，`0B ↑ 0B ↓`、状态 `N/A`、红叉 | QX 尝试解密但握手被拒 | 大概率 pinning → 回滚 MITM |
+| 顶部 `JS` 计数一直是 `0` | 没有任何脚本被执行过 | 说明这些请求压根没被解密 |
+| 连接数一直涨（633/634/635…） | App 在无限重试 | 说明它等不到响应 |
+
+三条同时成立 = **QX 的 MITM 被汽水的证书校验挡了**，而且挡住之后 App 直接判网络故障。
+
+### 立刻恢复
+
+把 qishui 从 `[mitm] hostname` 里摘掉（见 `rollback-qx-soda.conf`），保存后
+**关掉 VPN 再打开**。App 立刻恢复正常。
+
+### 想确认到底是 pinning 还是证书没信任
+
+1. QX 网络活动里找一个**别的 App** 的 HTTPS 请求（比如微信、Safari）
+   - 它也是 `0B / N/A / JS=0` → 全局 MITM 没工作，是**证书信任开关没开**
+     （iOS 设置 → 通用 → 关于本机 → 证书信任设置）
+   - 别的 App 正常解密、只有 qishui 不行 → 就是**汽水自己 pinning**
+2. 用 Safari 打开 `https://api5-lf.qishui.com/`
+   - 能打开且证书没警告 → 系统层信任没问题，问题在 App 的 pinning
+   - 弹证书警告 → 证书没装好/没信任
+
+### 判定 pinning 之后的选项
+
+iOS 不越狱 **没有**通用绕过手段（QX/Surge/Loon 都只能做 MITM，不能 hook）。
+能走的只有：
+
+1. **越狱 + Frida**：`mobile/android/frida_pinning_bypass.js`（同一个脚本 iOS 也适用）
+   `frida -U -f com.soda.music -l frida_pinning_bypass.js`
+2. **iPhone 不折腾**：继续用已经打好的 Mac 版（`/Applications/汽水音乐 VIP.app`）
+3. 等 iOS 端把业务逻辑挪到 WebView/JSBundle（目前不是）
+
+> 换句话说：iOS 这条路能不能通，**在做任何脚本之前**用 `JS` 计数就能判断。
+> `JS=0` 就没必要继续调脚本了。
