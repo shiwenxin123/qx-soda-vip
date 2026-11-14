@@ -80,3 +80,22 @@ require("./soda_vip_unlock.js")'
 ## 许可
 
 仅用于本机研究与互操作实验，不附带任何担保。
+
+## 手机端（iOS / Android）
+
+Mac 的改包方案不适用于手机；手机走流量改写，脚本与本仓库同一个文件。
+
+- **iOS**：Quantumult X 装证书 → 加重写规则 → 验证是否被证书 pinning 挡。
+  详见 [`mobile/ios/README.md`](mobile/ios/README.md)
+- **Android**：先跑 `mobile/android/probe_apk.py` 判断能不能改包，
+  再按结果选「改 APK / mitmproxy+Frida / Surfboard」。
+  详见 [`mobile/android/README.md`](mobile/android/README.md)
+
+两个通用的核对工具：
+
+- `mobile/android/soda_vip_unlock_mitm.py` — mitmproxy 插件，改写逻辑与 JS 版一致
+- `mobile/android/frida_pinning_bypass.js` — 过字节 cronet（libsscronet）的证书校验
+- `mobile/tools/mp4_duration.py` — 读落盘音频的真实时长/码率，判断是否拿到完整音源
+
+手机端第一件事不是装脚本，是**判断 App 让不让你解密流量**：汽水用字节自家 cronet，
+证书校验在 native 层，iOS 不越狱过不去；Android 有 root 可以用 Frida 过。
