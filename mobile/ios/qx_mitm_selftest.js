@@ -1,31 +1,30 @@
 /*
- * qx_mitm_selftest.js — 判断 QX 的 MITM 到底通不通（不碰汽水，零风险）
+ * qx_mitm_selftest.js — 判断 QX 的 MITM + 重写是否真的生效（v2）
+ *
+ * v2 改动：不再只弹通知，而是**直接改页面内容**。
+ *   因为「页面能打开」证明不了任何事 —— 没解密时页面照样能打开。
+ *   唯一可靠的证据是：页面上出现了原本不存在的内容。
  *
  * 用法：见 qx-mitm-selftest.conf
- *
- * 逻辑：
- *   这个脚本只会被 QX 在「成功解密 HTTPS」后调用。
- *   所以只要它跑起来（JS 计数 +1 / 弹通知），就证明：
- *     QX 根证书已安装 + 已在「证书信任设置」里打开 + MITM 开关已开
- *   如果它不跑，那跟汽水无关，是你 QX 的证书链路有问题。
  */
 
-const url = ($request && $request.url) || '';
+const url = (typeof $request !== 'undefined' && $request && $request.url) || '';
+let body = (typeof $response !== 'undefined' && $response && $response.body) || '';
 
-// 弹一条通知，肉眼可见
-$notify(
-  '✅ MITM 正常',
-  '脚本已执行',
-  url.slice(0, 60)
-);
+let out = body;
 
-// 顺便把结果存起来，方便之后查
-$prefs.setValueForKey(
-  JSON.stringify({ t: new Date().toISOString(), url }),
-  'mitm_selftest_last'
-);
+try {
+  const j = JSON.parse(body);
+  // 往返回的 JSON 里塞一个显眼字段
+  j.MITM_SELFTEST = '✅ MITM 与重写都已生效';
+  j.MITM_TIME = new Date().toISOString();
+  out = JSON.stringify(j, null, 2);
+} catch (e) {
+  // 不是 JSON 就纯文本标记
+  out = '✅ MITM OK — ' + body;
+}
 
-console.log('[selftest] MITM OK: ' + url);
+$notify('✅ MITM 自检', '重写已生效', url.slice(0, 50));
+console.log('[selftest] rewrote: ' + url);
 
-// 原样放行，不改任何东西
-$done({});
+$done({ body: out });
